@@ -8,6 +8,7 @@ import requests
 import subprocess
 import random
 import glob
+import urllib.parse
 
 import core as helper
 from utils import progress_bar
@@ -33,16 +34,23 @@ bot = Client(
     bot_token=BOT_TOKEN
 )
 
-# Define aiohttp routes
 routes = web.RouteTableDef()
 
-# Random User Agents list for rotation
 USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.0.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.0.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.0.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.0",
 ]
+
+# ClassPlus API Configuration
+CLASSPLUS_HEADERS = {
+    'x-access-token': 'eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJpZCI6MzgzNjkyMTIsIm9yZ0lkIjoyNjA1LCJ0eXBlIjoxLCJtb2JpbGUiOiI5MTcwODI3NzQyODkiLCJuYW1lIjoiQWNlIiwiZW1haWwiOm51bGwsImlzRmlyc3RMb2dpbiI6dHJ1ZSwiZGVmYXVsdExhbmd1YWdlIjpudWxsLCJjb3VudHJ5Q29kZSI6IklOIiwiaXNJbnRlcm5hdGlvbmFsIjowLCJpYXQiOjE2NDMyODE4NzcsImV4cCI6MTY0Mzg4NjY3N30.hM33P2ai6ivdzxPPfm01LAd4JWv-vnrSxGXqvCirCSpUfhhofpeqyeHPxtstXwe0',
+    'User-Agent': 'Mozilla/5.0 (Linux; Android 12; RMX2121) AppleWebKit/537.0.36 (KHTML, like Gecko) Chrome/107.0.0.0 Mobile Safari/537.0',
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Origin': 'https://web.classplusapp.com',
+    'Referer': 'https://web.classplusapp.com/',
+}
 
 @routes.get("/", allow_head=True)
 async def root_route_handler(request):
@@ -58,10 +66,8 @@ async def account_login(bot: Client, m: Message):
     await m.reply_text(
        Ashu.START_TEXT, reply_markup=InlineKeyboardMarkup(
             [
-                    [
-                    InlineKeyboardButton("✜ ᴀsʜᴜᴛᴏsʜ ɢᴏsᴡᴀᴍɪ 𝟸𝟺 ✜" ,url="https://t.me/AshutoshGoswami24") ],
-                    [
-                    InlineKeyboardButton("🦋 𝐅𝐨𝐥𝐥𝐨𝐰 𝐌𝐞 🦋" ,url="https://t.me/AshuSupport") ]                               
+                [InlineKeyboardButton("✜ ᴀsʜᴜᴛᴏsʜ ɢᴏsᴡᴀᴍɪ 𝟸𝟺 ✜", url="https://t.me/AshutoshGoswami24")],
+                [InlineKeyboardButton("🦋 𝐅𝐨𝐥𝐥𝐨𝐰 𝐌𝐞 🦋", url="https://t.me/AshuSupport")]
             ]))
 
 @bot.on_message(filters.command("stop"))
@@ -71,122 +77,161 @@ async def restart_handler(_, m):
 
 def clean_filename(name):
     """Clean filename for safe file operations"""
-    # Remove or replace invalid characters
+    name = str(name)
+    # Remove invalid characters
     name = re.sub(r'[<>:"/\\|?*]', '', name)
+    # Replace multiple spaces with single
     name = re.sub(r'\s+', ' ', name).strip()
-    return name[:100]  # Limit length
+    # Limit length
+    return name[:100]
+
+async def get_classplus_stream_url(original_url):
+    """
+    Get fresh stream URL from ClassPlus API
+    """
+    try:
+        # Extract video ID from URL
+        # URL format: https://media-cdn.classplusapp.com/.../master.m3u8
+        # Or: classplusapp://... or other formats
+        
+        # Try to get fresh URL from API
+        api_url = f'https://api.classplusapp.com/cams/uploader/video/jw-signed-url?url={urllib.parse.quote(original_url)}'
+        
+        response = requests.get(
+            api_url,
+            headers=CLASSPLUS_HEADERS,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if 'url' in data and data['url']:
+                return data['url']
+        
+        # If API fails, try alternative method
+        # Extract direct token from URL if present
+        if 'token=' in original_url:
+            return original_url
+            
+        return None
+        
+    except Exception as e:
+        print(f"ClassPlus API Error: {e}")
+        return None
+
+async def download_with_ytdlp_classplus(url, name, resolution="480", max_retries=3):
+    """
+    Specialized downloader for ClassPlus with anti-403 measures
+    """
+    clean_name = clean_filename(name)
+    
+    for attempt in range(max_retries):
+        try:
+            # Get fresh URL if it's ClassPlus
+            fresh_url = await get_classplus_stream_url(url)
+            if fresh_url:
+                download_url = fresh_url
+                print(f"Using fresh URL: {download_url[:100]}...")
+            else:
+                download_url = url
+            
+            # yt-dlp command with ClassPlus-specific options
+            cmd = [
+                "yt-dlp",
+                "--no-check-certificates",
+                "--user-agent", random.choice(USER_AGENTS),
+                "--add-header", f"Referer:https://web.classplusapp.com/",
+                "--add-header", "Origin:https://web.classplusapp.com",
+                "--add-header", f"Authorization:Bearer {CLASSPLUS_HEADERS['x-access-token']}",
+                "--retries", "10",
+                "--fragment-retries", "10",
+                "--socket-timeout", "30",
+                "--force-ipv4",
+                "--no-warnings",
+                "--allow-unplayable-formats",  # Important for DRM/encrypted streams
+                "--fixup", "never",
+                "-f", f"b[height<={resolution}]/bv[height<={resolution}]+ba/b/bv+ba",
+                "-o", f"{clean_name}.%(ext)s",
+                download_url
+            ]
+            
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(),
+                timeout=600  # 10 minute timeout
+            )
+            
+            stderr_str = stderr.decode() if stderr else ""
+            
+            if process.returncode == 0:
+                # Find downloaded file
+                possible_exts = ['.mp4', '.mkv', '.webm', '.ts', '.mov']
+                for ext in possible_exts:
+                    if os.path.exists(f"{clean_name}{ext}"):
+                        return True, f"{clean_name}{ext}", None
+                
+                # Check for any matching file
+                files = glob.glob(f"{clean_name}*")
+                if files:
+                    return True, files[0], None
+                
+                return False, None, "File not found after download"
+            
+            # Check for 403 error
+            if "403" in stderr_str or "Forbidden" in stderr_str:
+                if attempt < max_retries - 1:
+                    wait_time = 3 * (attempt + 1)
+                    print(f"403 Error, retrying in {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                    continue
+                return False, None, f"403 Forbidden after {max_retries} attempts"
+            
+            return False, None, stderr_str
+            
+        except asyncio.TimeoutError:
+            if attempt == max_retries - 1:
+                return False, None, "Download timeout"
+            await asyncio.sleep(5)
+            
+        except Exception as e:
+            if attempt == max_retries - 1:
+                return False, None, str(e)
+            await asyncio.sleep(2)
+    
+    return False, None, "Max retries exceeded"
 
 async def download_pdf_direct(url, output_path, max_retries=3):
-    """
-    Direct PDF download with requests (more reliable for PDFs)
-    """
+    """Direct PDF download"""
     headers = {
         'User-Agent': random.choice(USER_AGENTS),
-        'Accept': 'application/pdf,application/xhtml+xml,application/xml;q=0.9,image/webp,/;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1'
+        'Accept': 'application/pdf,*/*',
     }
     
     for attempt in range(max_retries):
         try:
-            response = requests.get(
-                url, 
-                headers=headers, 
-                timeout=60,
-                stream=True,
-                allow_redirects=True
-            )
+            response = requests.get(url, headers=headers, timeout=60, stream=True)
             response.raise_for_status()
             
-            # Check if content is actually PDF
-            content_type = response.headers.get('content-type', '').lower()
-            if 'pdf' not in content_type and 'application' not in content_type:
-                # Try anyway, might be misconfigured server
-                pass
-            
-            # Save with progress
             with open(output_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
             
-            # Verify file was created and has content
             if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                 return True, None
-            else:
-                return False, "Downloaded file is empty"
-                
+            return False, "Empty file"
+            
         except Exception as e:
             if attempt == max_retries - 1:
                 return False, str(e)
-            time.sleep(2 ** attempt)  # Exponential backoff
+            time.sleep(2 ** attempt)
     
     return False, "Max retries exceeded"
-
-async def download_with_ytdlp(url, output_name, m=None):
-    """
-    Download using yt-dlp with proper error handling
-    """
-    clean_name = clean_filename(output_name)
-    output_template = f"{clean_name}.%(ext)s"
-    
-    cmd = [
-        "yt-dlp",
-        "--no-check-certificates",
-        "--user-agent", random.choice(USER_AGENTS),
-        "--retries", "10",
-        "--fragment-retries", "10",
-        "--socket-timeout", "30",
-        "--no-warnings",
-        "-o", output_template,
-        url
-    ]
-    
-    try:
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(), 
-            timeout=300  # 5 minute timeout
-        )
-        
-        if process.returncode != 0:
-            return False, stderr.decode() if stderr else "Unknown error"
-        
-        # Find downloaded file
-        await asyncio.sleep(1)  # Wait for filesystem
-        
-        # Check for any file with similar name
-        possible_files = (
-            glob.glob(f"{clean_name}.*") + 
-            glob.glob(f"{clean_name}*")
-        )
-        
-        pdf_files = [f for f in possible_files if f.endswith('.pdf')]
-        
-        if pdf_files:
-            return True, pdf_files[0]
-        elif possible_files:
-            # Rename to .pdf if different extension
-            downloaded = possible_files[0]
-            if not downloaded.endswith('.pdf'):
-                new_name = f"{clean_name}.pdf"
-                os.rename(downloaded, new_name)
-                return True, new_name
-            return True, downloaded
-        
-        return False, "File not found after download"
-        
-    except asyncio.TimeoutError:
-        return False, "Download timeout"
-    except Exception as e:
-        return False, str(e)
 
 @bot.on_message(filters.command(["upload"]))
 async def account_login(bot: Client, m: Message):
@@ -195,10 +240,10 @@ async def account_login(bot: Client, m: Message):
     x = await input_msg.download()
     await input_msg.delete(True)
 
-    # Create downloads directory
     download_dir = f"./downloads/{m.chat.id}"
     os.makedirs(download_dir, exist_ok=True)
-    os.chdir(download_dir)  # Change to download directory
+    original_dir = os.getcwd()
+    os.chdir(download_dir)
 
     try:
         with open(x, "r", encoding="utf-8") as f:
@@ -224,8 +269,7 @@ async def account_login(bot: Client, m: Message):
             os.remove(x)
         return
     
-   
-    await editable.edit(f"ɪɴ ᴛxᴛ ғɪʟᴇ ᴛɪᴛʟᴇ ʟɪɴᴋ 🔗* *{len(links)}**\n\nsᴇɴᴅ ғʀᴏᴍ  ᴡʜᴇʀᴇ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴅᴏᴡɴʟᴏᴀᴅ ɪɴɪᴛᴀʟ ɪs 1")
+    await editable.edit(f"ɪɴ ᴛxᴛ ғɪʟᴇ ᴛɪᴛʟᴇ ʟɪɴᴋ 🔗** **{len(links)}**\n\nsᴇɴᴅ ғʀᴏᴍ  ᴡʜᴇʀᴇ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴅᴏᴡɴʟᴏᴀᴅ ɪɴɪᴛᴀʟ ɪs `1`")
     input0: Message = await bot.listen(editable.chat.id)
     raw_text = input0.text
     await input0.delete(True)
@@ -235,34 +279,22 @@ async def account_login(bot: Client, m: Message):
     raw_text0 = input1.text
     await input1.delete(True)
     
-
     await editable.edit(Ashu.Q1_TEXT)
     input2: Message = await bot.listen(editable.chat.id)
     raw_text2 = input2.text
     await input2.delete(True)
     
-    # Resolution mapping
-    res_map = {
-        "144": "256x144",
-        "240": "426x240", 
-        "360": "640x360",
-        "480": "854x480",
-        "720": "1280x720",
-        "1080": "1920x1080"
-    }
+    res_map = {"144": "256x144", "240": "426x240", "360": "640x360", 
+               "480": "854x480", "720": "1280x720", "1080": "1920x1080"}
     res = res_map.get(raw_text2, "UN")
     
-
     await editable.edit(Ashu.C1_TEXT)
     input3: Message = await bot.listen(editable.chat.id)
     raw_text3 = input3.text
     await input3.delete(True)
     
     highlighter = f"️ ⁪⁬⁮⁮⁮"
-    if raw_text3 == 'Robin':
-        MR = highlighter 
-    else:
-        MR = raw_text3
+    MR = highlighter if raw_text3 == 'Robin' else raw_text3
    
     await editable.edit(Ashu.T1_TEXT)
     input6 = await bot.listen(editable.chat.id)
@@ -277,7 +309,6 @@ async def account_login(bot: Client, m: Message):
     else:
         thumb = "no"
 
-    # Parse start count
     try:
         count = int(raw_text) if raw_text.isdigit() else 1
     except:
@@ -298,54 +329,29 @@ async def account_login(bot: Client, m: Message):
                     .replace("/view?usp=sharing",""))
                 
                 url = "https://" + url_part
-
-                # Handle special domains
-                if "visionias" in url:
-                    try:
-                        async with ClientSession() as session:
-                            headers = {
-                                'User-Agent': random.choice(USER_AGENTS),
-                                'Referer': 'http://www.visionias.in/',
-                            }
-                            async with session.get(url, headers=headers) as resp:
-                                text = await resp.text()
-                                url = re.search(r"(https://.?playlist.m3u8.?)\"", text).group(1)
-                    except Exception as e:
-                        await m.reply_text(f"⚠️ VisionIAS Error: {str(e)}")
-                        continue
-
-                elif 'videos.classplusapp' in url or 'classplus.co' in url:
-                    try:
-                        response = requests.get(
-                            f'https://api.classplusapp.com/cams/uploader/video/jw-signed-url?url={url}',
-                            headers={
-                                'x-access-token': 'eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJpZCI6MzgzNjkyMTIsIm9yZ0lkIjoyNjA1LCJ0eXBlIjoxLCJtb2JpbGUiOiI5MTcwODI3NzQyODkiLCJuYW1lIjoiQWNlIiwiZW1haWwiOm51bGwsImlzRmlyc3RMb2dpbiI6dHJ1ZSwiZGVmYXVsdExhbmd1YWdlIjpudWxsLCJjb3VudHJ5Q29kZSI6IklOIiwiaXNJbnRlcm5hdGlvbmFsIjowLCJpYXQiOjE2NDMyODE4NzcsImV4cCI6MTY0Mzg4NjY3N30.hM33P2ai6ivdzxPPfm01LAd4JWv-vnrSxGXqvCirCSpUfhhofpeqyeHPxtstXwe0',
-                                'User-Agent': random.choice(USER_AGENTS)
-                            }
-                        )
-                        url = response.json()['url']
-                    except Exception as e:
-                        await m.reply_text(f"⚠️ ClassPlus Error: {str(e)}")
-                        continue
-
-                elif '/master.mpd' in url:
-                    try:
-                        vid_id = url.split("/")[-2]
-                        url = f"https://d26g5bnklkwsh4.cloudfront.net/{vid_id}/master.m3u8"
-                    except:
-                        pass
-
-                # Clean name
                 raw_name = links[i][0].replace("\t", "").replace(":", "").replace("/", "").replace("+", "").replace("#", "").replace("|", "").replace("@", "").replace("*", "").replace("https", "").replace("http", "").strip()
+                
                 name1 = clean_filename(raw_name)
                 display_name = f'{str(count).zfill(3)}) {name1[:60]}'
                 file_safe_name = f'{str(count).zfill(3)})_{name1[:50]}'
 
-                # Captions
-                cc = f'*[ 🎥 ] Vid_ID:* {str(count).zfill(3)}.* {name1}{MR}.mkv\n✉️ 𝐁𝐚𝐭𝐜𝐡 » *{raw_text0}**'
-                cc1 = f'*[ 📁 ] Pdf_ID:* {str(count).zfill(3)}. {name1}{MR}.pdf \n✉️ 𝐁𝐚𝐭𝐜𝐡 » *{raw_text0}*'
+                cc = f'**[ 🎥 ] Vid_ID:** {str(count).zfill(3)}.** {name1}{MR}.mkv\n✉️ 𝐁𝐚𝐭𝐜𝐡 » **{raw_text0}**'
+                cc1 = f'**[ 📁 ] Pdf_ID:** {str(count).zfill(3)}. {name1}{MR}.pdf \n✉️ 𝐁𝐚𝐭𝐜𝐡 » **{raw_text0}**'
 
-                # Handle Google Drive
+                # VisionIAS Handling
+                if "visionias" in url:
+                    try:
+                        async with ClientSession() as session:
+                            headers = {'User-Agent': random.choice(USER_AGENTS), 'Referer': 'http://www.visionias.in/'}
+                            async with session.get(url, headers=headers) as resp:
+                                text = await resp.text()
+                                url = re.search(r"(https://.*?playlist.m3u8.*?)\"", text).group(1)
+                    except Exception as e:
+                        await m.reply_text(f"⚠️ VisionIAS Error: {str(e)}")
+                        count += 1
+                        continue
+
+                # Google Drive
                 if "drive" in url:
                     try:
                         ka = await helper.download(url, file_safe_name)
@@ -354,145 +360,94 @@ async def account_login(bot: Client, m: Message):
                             success_count += 1
                             os.remove(ka)
                         else:
-                            failed_downloads.append((display_name, "Drive download failed"))
+                            failed_downloads.append((display_name, "Drive failed"))
                     except Exception as e:
                         failed_downloads.append((display_name, f"Drive: {str(e)}"))
                     count += 1
                     continue
                 
-                # Handle PDF
-                elif ".pdf" in url.lower() or url.lower().endswith('.pdf'):
+                # PDF Handling
+                elif ".pdf" in url.lower():
                     prog = await m.reply_text(f"📄 Downloading PDF: {display_name}")
-                    
                     pdf_path = f"{file_safe_name}.pdf"
-                    success = False
-                    error_msg = ""
                     
-                    # Method 1: Direct download
-                    try:
-                        success, error_msg = await download_pdf_direct(url, pdf_path)
-                    except Exception as e:
-                        error_msg = f"Direct: {str(e)}"
+                    success, error = await download_pdf_direct(url, pdf_path)
                     
-                    # Method 2: yt-dlp fallback
-                    if not success or not os.path.exists(pdf_path):
-                        try:
-                            if os.path.exists(pdf_path):
-                                os.remove(pdf_path)
-                            success, result = await download_with_ytdlp(url, file_safe_name, m)
-                            if success and os.path.exists(result):
-                                pdf_path = result
-                                success = True
-                        except Exception as e:
-                            error_msg += f" | ytdlp: {str(e)}"
-                    
-                    # Send if successful
                     if success and os.path.exists(pdf_path):
                         try:
-                            file_size = os.path.getsize(pdf_path)
-                            if file_size == 0:
-                                raise Exception("Downloaded file is empty")
-                            
-                            await prog.edit(f"📤 Uploading: {display_name} ({file_size//1024}KB)")
-                            
-                            await bot.send_document(
-                                chat_id=m.chat.id, 
-                                document=pdf_path, 
-                                caption=cc1
-                            )
+                            await bot.send_document(chat_id=m.chat.id, document=pdf_path, caption=cc1)
                             success_count += 1
-                            
-                            # Cleanup
-                            try:
-                                os.remove(pdf_path)
-                            except:
-                                pass
-                                
-                        except FloodWait as e:
-                            await m.reply_text(f"⏳ FloodWait: {e.x} seconds")
-                            await asyncio.sleep(e.x)
-                            # Retry send
-                            await bot.send_document(
-                                chat_id=m.chat.id, 
-                                document=pdf_path, 
-                                caption=cc1
-                            )
+                            os.remove(pdf_path)
                         except Exception as e:
                             failed_downloads.append((display_name, f"Send: {str(e)}"))
                     else:
-                        failed_downloads.append((display_name, error_msg or "Unknown error"))
-                        await prog.edit(f"❌ Failed: {display_name}\nError: {error_msg}")
+                        failed_downloads.append((display_name, error or "PDF failed"))
                     
-                    try:
-                        await prog.delete()
-                    except:
-                        pass
-                    
+                    await prog.delete()
                     count += 1
                     await asyncio.sleep(1)
                     continue
                 
-                # Handle Video
+                # Video Handling (including ClassPlus)
                 else:
-                    if "youtu" in url:
-                        ytf = f"b[height<={raw_text2}][ext=mp4]/bv[height<={raw_text2}][ext=mp4]+ba[ext=m4a]/b[ext=mp4]"
-                    else:
-                        ytf = f"b[height<={raw_text2}]/bv[height<={raw_text2}]+ba/b/bv+ba"
-
-                    Show = f"❊⟱ 𝐃𝐨𝐰𝐧𝐥𝐨𝐚𝐝𝐢𝐧𝐠 ⟱❊ »\n\n📝 𝐍𝐚𝐦𝐞 » {display_name}\n⌨ 𝐐𝐮𝐥𝐢𝐭𝐲 » {raw_text2}\n\n*🔗 𝐔𝐑𝐋 »* {url}"
+                    is_classplus = "classplusapp.com" in url or "media-cdn.classplusapp.com" in url
+                    
+                    Show = f"❊⟱ 𝐃𝐨𝐰𝐧𝐥𝐨𝐚𝐝𝐢𝐧𝐠 ⟱❊ »\n\n📝 𝐍𝐚𝐦𝐞 » `{display_name}`\n⌨ 𝐐𝐮𝐥𝐢𝐭𝐲 » {raw_text2}\n{'🎓 ClassPlus' if is_classplus else ''}\n\n**🔗 𝐔𝐑𝐋 »** `{url[:60]}...`"
                     prog = await m.reply_text(Show)
                     
-                    try:
-                        res_file = await helper.download_video(url, f"yt-dlp -f '{ytf}' '{url}' -o '{file_safe_name}.%(ext)s'", file_safe_name)
-                        
-                        if res_file and os.path.exists(res_file):
-                            await prog.delete()
-                            await helper.send_vid(bot, m, cc, res_file, thumb, display_name, prog)
-                            success_count += 1
-                            
-                            # Cleanup
-                            try:
-                                os.remove(res_file)
-                            except:
-                                pass
-                        else:
-                            failed_downloads.append((display_name, "Video download failed"))
-                            
-                    except Exception as e:
-                        failed_downloads.append((display_name, f"Video: {str(e)}"))
-                        await prog.edit(f"❌ Video Error: {str(e)}")
+                    if is_classplus:
+                        # Use specialized ClassPlus downloader
+                        success, filename, error = await download_with_ytdlp_classplus(
+                            url, file_safe_name, raw_text2
+                        )
+                    else:
+                        # Regular download
+                        ytf = f"b[height<={raw_text2}][ext=mp4]/bv[height<={raw_text2}][ext=mp4]+ba[ext=m4a]/b[ext=mp4]" if "youtu" in url else f"b[height<={raw_text2}]/bv[height<={raw_text2}]+ba/b/bv+ba"
+                        cmd = f"yt-dlp -f '{ytf}' '{url}' -o '{file_safe_name}.%(ext)s'"
+                        success, filename, error = True, None, None
+                        try:
+                            res_file = await helper.download_video(url, cmd, file_safe_name)
+                            filename = res_file
+                        except Exception as e:
+                            success, error = False, str(e)
+                    
+                    if success and filename and os.path.exists(filename):
+                        await prog.delete()
+                        await helper.send_vid(bot, m, cc, filename, thumb, display_name, prog)
+                        success_count += 1
+                        try:
+                            os.remove(filename)
+                        except:
+                            pass
+                    else:
+                        failed_downloads.append((display_name, error or "Download failed"))
+                        await prog.edit(f"❌ Failed: {display_name}\nError: {error}")
                     
                     count += 1
                     await asyncio.sleep(1)
 
             except Exception as e:
                 failed_downloads.append((links[i][0] if i < len(links) else "Unknown", str(e)))
-                await m.reply_text(f"⚠️ Loop Error: {str(e)}")
+                await m.reply_text(f"⚠️ Error: {str(e)}")
                 count += 1
                 continue
 
     except Exception as e:
         await m.reply_text(f"Main Error: {str(e)}")
     
-    # Final report
-    report = f"✅ 𝐒𝐮𝐜𝐜𝐞𝐬𝐬𝐟𝐮𝐥𝐥𝐲 𝐃𝐨𝐧𝐞\n\n📊 𝐒𝐭𝐚𝐭𝐬:\n✓ Success: {success_count}\n✗ Failed: {len(failed_downloads)}"
-    
+    # Report
+    report = f"✅ 𝐃𝐨𝐧𝐞\n\n📊 𝐒𝐭𝐚𝐭𝐬:\n✓ Success: {success_count}\n✗ Failed: {len(failed_downloads)}"
     if failed_downloads:
-        report += "\n\n❌ 𝐅𝐚𝐢𝐥𝐞𝐝 𝐈𝐭𝐞𝐦𝐬:\n"
-        for name, error in failed_downloads[:10]:  # Show first 10
-            report += f"• {name[:30]}...: {error[:50]}\n"
-        if len(failed_downloads) > 10:
-            report += f"...and {len(failed_downloads)-10} more"
+        report += "\n\n❌ 𝐅𝐚𝐢𝐥𝐞𝐝:\n"
+        for name, error in failed_downloads[:5]:
+            report += f"• {name[:30]}: {error[:40]}\n"
     
     await m.reply_text(report)
     
-    # Cleanup directory
-    try:
-        os.chdir("..")
-        import shutil
-        shutil.rmtree(download_dir, ignore_errors=True)
-    except:
-        pass
+    # Cleanup
+    os.chdir(original_dir)
+    import shutil
+    shutil.rmtree(download_dir, ignore_errors=True)
 
 async def main():
     if WEBHOOK:
@@ -503,7 +458,7 @@ async def main():
         await site.start()
         print(f"Web server started on port {PORT}")
 
-if __name__== "__main__":
+if __name__ == "__main__":
     print("""
     █░█░█ █▀█ █▀█ █▀▄ █▀▀ █▀█ ▄▀█ █▀▀ ▀█▀     ▄▀█ █▀ █░█ █░█ ▀█▀ █▀█ █▀ █░█   
     ▀▄▀▄▀ █▄█ █▄█ █▄▀ █▄▄ █▀▄ █▀█ █▀░ ░█░     █▀█ ▄█ █▀█ █▄█ ░█░ █▄█ ▄█ █▀█ """)
