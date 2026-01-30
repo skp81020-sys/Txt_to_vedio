@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <!-- RAINBOW LINE TOP -->
 <img src="https://github.com/SudoR2spr/SudoR2spr/raw/main/assets/line-neon.gif" width="100%">
 
@@ -83,3 +84,7 @@ Credits: 🎖️<a href="https://t.me/Farooq_is_KING">𝐖𝐎𝐎𝐃𝐜𝐫�
 Last Edited on: 07/01/2024, 11:05:19 PM
 
 
+=======
+# Txt_to_vedio
+THis repo is text to vedio
+>>>>>>> a6daf6568cc1abf6d2ca106a1838b65df1356637
