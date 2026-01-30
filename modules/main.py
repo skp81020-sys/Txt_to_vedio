@@ -44,8 +44,7 @@ USER_AGENTS = [
 
 # ClassPlus API Configuration
 CLASSPLUS_HEADERS = {
-    'x-access-token': 'eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJpZCI6MzgzNjkyMTIsIm9yZ0lkIjoyNjA1LCJ0eXBlIjoxLCJtb2JpbGUiOiI5MTcwODI3NzQyODkiLCJuYW1lIjoiQWNlIiwiZW1haWwiOm51bGwsImlzRmlyc3RMb2dpbiI6dHJ1ZSwiZGVmYXVsdExhbmd1YWdlIjpudWxsLCJjb3VudHJ5Q29kZSI6IklOIiwiaXNJbnRlcm5hdGlvbmFsIjowLCJpYXQiOjE2NDMyODE4NzcsImV4cCI6MTY0Mzg4NjY3N30.hM33P2ai6ivdzxPPfm01LAd4JWv-vnrSxGXqvCirCSpUfhhofpeqyeHPxtstXwe0',
-    'User-Agent': 'Mozilla/5.0 (Linux; Android 12; RMX2121) AppleWebKit/537.0.36 (KHTML, like Gecko) Chrome/107.0.0.0 Mobile Safari/537.0',
+    'x-access-token': ' eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJpZCI6MTYxMTE2NDcxLCJvcmdJZCI6NjI3MTc3LCJ0eXBlIjoxLCJtb2JpbGUiOiI5MTk1MDQ5MzczMDkiLCJuYW1lIjoiU2F0aXNoIEt1bWFyIiwiZW1haWwiOm51bGwsImlzSW50ZXJuYXRpb25hbCI6MCwiZGVmYXVsdExhbmd1YWdlIjoiRU4iLCJjb3VudHJ5Q29kZSI6IklOIiwiY291bnRyeUlTTyI6IjkxIiwidGltZXpvbmUiOiJHTVQrNTozMCIsImlzRGl5Ijp0cnVlLCJvcmdDb2RlIjoiamZxcnhjIiwiaXNEaXlTdWJhZG1pbiI6MCwiZmluZ2VycHJpbnRJZCI6IjM0NzQ1ZDY0MjkwMjQyY2I5YTNhZmRkYjFkMzg4NDlmIiwiaWF0IjoxNzY5NzgzMzkxLCJleHAiOjE3NzAzODgxOTF9.C1K_H4OfhiU_uHfS2sUb8XRfjzrl7rGDTDpCDSkcCUwLJACSQ1VadBWR-QMB-E8U',
     'Accept': 'application/json, text/plain, */*',
     'Accept-Language': 'en-US,en;q=0.9',
     'Origin': 'https://web.classplusapp.com',
