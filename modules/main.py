@@ -562,15 +562,20 @@ if __name__ == "__main__":
     
     logger.info("Starting bot...")
     
-    loop = asyncio.get_event_loop()
+    async def run_bot():
+        await bot.start()
+        logger.info("Bot started!")
+        
+        # Start web server if needed
+        if WEBHOOK:
+            await main()
+        
+        # Keep running
+        await asyncio.Event().wait()
+    
     try:
-        loop.create_task(bot.start())
-        loop.create_task(main())
-        loop.run_forever()
+        asyncio.run(run_bot())
     except KeyboardInterrupt:
         logger.info("Bot stopped by user")
     except Exception as e:
         logger.error(f"Fatal error: {e}")
-    finally:
-        loop.stop()
-        logger.info("Cleanup completed")
