@@ -1,43 +1,22 @@
-# modules/main.py - COMPLETE FIXED VERSION
 import os
-import re
 import sys
-import json
-import time
 import asyncio
 import requests
 import subprocess
-import random
-import glob
-import shutil
-import logging
-import urllib.parse
-from datetime import datetime
-
-import core as helper
-from utils import progress_bar
-from vars import API_ID, API_HASH, BOT_TOKEN, WEBHOOK, PORT
-from aiohttp import ClientSession
-from pyromod import listen
-from subprocess import getstatusoutput
-from aiohttp import web
+import time
+import instaloader
 
 from pyrogram import Client, filters
-from pyrogram.types import Message
-from pyrogram.errors import FloodWait
-from pyrogram.errors.exceptions.bad_request_400 import StickerEmojiInvalid
-from pyrogram.types.messages_and_media import message
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from style import Ashu 
+from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
+from aiohttp import web, ClientSession
+from vars import API_ID, API_HASH, BOT_TOKEN, WEBHOOK, PORT, CLASSPLUS_TOKENS, INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD
+from utils import progress_bar, TokenManager, get_classplus_signed_url
+from style import Ashu
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Initialize Token Manager with multiple tokens
+token_manager = TokenManager(CLASSPLUS_TOKENS)
 
-# Initialize bot
+# Initialize the bot
 bot = Client(
     "bot",
     api_id=API_ID,
@@ -45,537 +24,221 @@ bot = Client(
     bot_token=BOT_TOKEN
 )
 
+# Define aiohttp routes for webhook
 routes = web.RouteTableDef()
 
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.0.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.0.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.0",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.0.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.0",
-]
-
-# ============== CLASSPLUS CONFIGURATION ==============
-CLASSPLUS_TOKENS = [
-    "eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJpZCI6MTg3MzYzNDMsIm9yZ0lkIjoyNTM0LCJ0eXBlIjoxLCJtb2JpbGUiOiI5MTcwODI3NzQyODkiLCJuYW1lIjoiU3VkaGFuc2h1IiwiZW1haWwiOm51bGwsImlzRmlyc3RMb2dpbiI6dHJ1ZSwiZGVmYXVsdExhbmd1YWdlIjpudWxsLCJjb3VudHJ5Q29kZSI6IklOIiwiaXNJbnRlcm5hdGlvbmFsIjowLCJpYXQiOjE3MDQ2MTQ2MDAsImV4cCI6MTcwNTIxOTQwMH0",
-    "eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJpZCI6MzgzNjkyMTIsIm9yZ0lkIjoyNjA1LCJ0eXBlIjoxLCJtb2JpbGUiOiI5MTcwODI3NzQyODkiLCJuYW1lIjoiQWNlIiwiZW1haWwiOm51bGwsImlzRmlyc3RMb2dpbiI6dHJ1ZSwiZGVmYXVsdExhbmd1YWdlIjpudWxsLCJjb3VudHJ5Q29kZSI6IklOIiwiaXNJbnRlcm5hdGlvbmFsIjowLCJpYXQiOjE2NDMyODE4NzcsImV4cCI6MTY0Mzg4NjY3N30",
-]
-
-def get_classplus_headers():
-    """Get fresh headers with random token"""
-    return {
-        'x-access-token': random.choice(CLASSPLUS_TOKENS),
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 12; RMX2121) AppleWebKit/537.0.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.0',
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Origin': 'https://web.classplusapp.com',
-        'Referer': 'https://web.classplusapp.com/',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-site',
-    }
-
-# ============== WEB SERVER ==============
 @routes.get("/", allow_head=True)
 async def root_route_handler(request):
-    return web.json_response({
-        "status": "running",
-        "bot": "Txt_to_Video_Bot",
-        "github": "https://github.com/skp81020-sys"
-    })
+    return web.json_response("https://github.com/AshutoshGoswami24")
 
 async def web_server():
     web_app = web.Application(client_max_size=30000000)
     web_app.add_routes(routes)
     return web_app
 
-# ============== BOT COMMANDS ==============
 @bot.on_message(filters.command(["start"]))
-async def start_handler(bot: Client, m: Message):
-    await m.reply_text(
-        Ashu.START_TEXT if hasattr(Ashu, 'START_TEXT') else "🤖 **Bot Started!**\n\nSend /upload to begin.",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("✜ Developer ✜", url="https://t.me/AshutoshGoswami24")],
-            [InlineKeyboardButton("📢 Updates", url="https://t.me/AshuSupport")]
-        ])
+async def account_login(bot: Client, m: Message):
+    editable = await m.reply_text(
+       Ashu.START_TEXT,
+       reply_markup=InlineKeyboardMarkup([
+           [
+               InlineKeyboardButton("✜ ᴀsʜᴜᴛᴏsʜ ɢᴏsᴡᴀᴍɪ 𝟸𝟺 ✜", url="https://t.me/AshutoshGoswami24")
+           ],
+           [
+               InlineKeyboardButton("🦋 𝐅𝐨𝐥𝐥𝐨𝐰 𝐌𝐞 🦋", url="https://t.me/AshuSupport")
+           ]
+       ])
     )
 
 @bot.on_message(filters.command("stop"))
-async def stop_handler(_, m):
-    await m.reply_text("♦️ **Stopping Bot...**", True)
+async def restart_handler(_, m):
+    await m.reply_text("♦ 𝐒𝐭𝐨𝐩𝐩𝐞𝐭 ♦", True)
     os.execl(sys.executable, sys.executable, *sys.argv)
 
-@bot.on_message(filters.command("status"))
-async def status_handler(_, m):
-    """Check bot status"""
-    uptime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    await m.reply_text(f"✅ **Bot Running**\n🕐 Time: {uptime}")
-
-# ============== UTILITY FUNCTIONS ==============
-def clean_filename(name):
-    """Clean filename for safe file operations"""
-    if not name:
-        return "unknown"
-    
-    name = str(name)
-    # Remove invalid characters
-    name = re.sub(r'[<>:"/\\|?*]', '', name)
-    # Remove control characters
-    name = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', name)
-    # Replace multiple spaces/dots
-    name = re.sub(r'\s+', ' ', name).strip()
-    name = re.sub(r'\.+', '.', name)
-    # Limit length
-    return name[:80].strip('.')
-
-def safe_remove(filepath):
-    """Safely remove file if exists"""
-    try:
-        if filepath and os.path.exists(filepath):
-            os.remove(filepath)
-            return True
-    except Exception as e:
-        logger.error(f"Failed to remove {filepath}: {e}")
-    return False
-
-async def download_with_progress(url, output_path, chunk_size=8192):
-    """Download file with progress tracking"""
-    try:
-        headers = {'User-Agent': random.choice(USER_AGENTS)}
-        response = requests.get(url, headers=headers, stream=True, timeout=120)
-        response.raise_for_status()
-        
-        total_size = int(response.headers.get('content-length', 0))
-        downloaded = 0
-        
-        with open(output_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=chunk_size):
-                if chunk:
-                    f.write(chunk)
-                    downloaded += len(chunk)
-        
-        return os.path.exists(output_path) and os.path.getsize(output_path) > 0
-    except Exception as e:
-        logger.error(f"Download error: {e}")
-        return False
-
-# ============== CLASSPLUS HANDLER ==============
-async def get_classplus_stream_url(m3u8_url):
-    """Get fresh stream URL from ClassPlus API"""
-    headers = get_classplus_headers()
-    
-    try:
-        # Try API endpoint
-        encoded_url = urllib.parse.quote(m3u8_url, safe='')
-        api_url = f'https://api.classplusapp.com/cams/uploader/video/jw-signed-url?url={encoded_url}'
-        
-        response = requests.get(api_url, headers=headers, timeout=30)
-        
-        if response.status_code == 200:
-            data = response.json()
-            if 'url' in data and data['url']:
-                logger.info("Got fresh URL from ClassPlus API")
-                return data['url']
-        
-        # If API fails, return original with headers
-        logger.warning("API failed, using original URL with headers")
-        return {
-            'url': m3u8_url,
-            'headers': {
-                'User-Agent': headers['User-Agent'],
-                'Referer': 'https://web.classplusapp.com/',
-                'Origin': 'https://web.classplusapp.com',
-            }
-        }
-        
-    except Exception as e:
-        logger.error(f"ClassPlus API error: {e}")
-        return None
-
-async def download_video_ytdlp(url, name, resolution="480", is_classplus=False):
-    """
-    Universal video downloader with retry logic
-    """
-    clean_name = clean_filename(name)
-    output_template = f"{clean_name}.%(ext)s"
-    
-    for attempt in range(3):
-        try:
-            cmd = [
-                "yt-dlp",
-                "--no-check-certificates",
-                "--user-agent", random.choice(USER_AGENTS),
-                "--retries", "10",
-                "--fragment-retries", "10",
-                "--socket-timeout", "30",
-                "--force-ipv4",
-                "--no-warnings",
-                "--newline",
-                "-f", f"b[height<={resolution}]/bv[height<={resolution}]+ba/b/bv+ba",
-                "-o", output_template,
-            ]
-            
-            # Add ClassPlus specific headers
-            if is_classplus:
-                result = await get_classplus_stream_url(url)
-                if isinstance(result, dict):
-                    download_url = result['url']
-                    for key, value in result.get('headers', {}).items():
-                        cmd.extend(["--add-header", f"{key}:{value}"])
-                else:
-                    download_url = result or url
-                
-                cmd.extend([
-                    "--add-header", f"Authorization:Bearer {get_classplus_headers()['x-access-token']}",
-                    "--add-header", "Referer:https://web.classplusapp.com/",
-                ])
-            else:
-                download_url = url
-            
-            cmd.append(download_url)
-            
-            logger.info(f"Download attempt {attempt + 1}: {clean_name}")
-            
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=600)
-            
-            if process.returncode == 0:
-                # Find downloaded file
-                for ext in ['.mp4', '.mkv', '.webm', '.ts', '.mov']:
-                    filepath = f"{clean_name}{ext}"
-                    if os.path.exists(filepath):
-                        return True, filepath, None
-                
-                # Check for any matching file
-                files = glob.glob(f"{clean_name}*")
-                if files:
-                    return True, files[0], None
-                
-                return False, None, "File not found after download"
-            
-            stderr_str = stderr.decode() if stderr else "Unknown error"
-            
-            # Check for specific errors
-            if "403" in stderr_str:
-                logger.warning(f"403 error on attempt {attempt + 1}")
-                if attempt < 2:
-                    await asyncio.sleep(3 * (attempt + 1))
-                    continue
-                return False, None, "403 Forbidden - Token expired or IP blocked"
-            
-            return False, None, stderr_str
-            
-        except asyncio.TimeoutError:
-            logger.error("Download timeout")
-            if attempt == 2:
-                return False, None, "Download timeout after 3 attempts"
-            await asyncio.sleep(5)
-            
-        except Exception as e:
-            logger.error(f"Download error: {e}")
-            if attempt == 2:
-                return False, None, str(e)
-            await asyncio.sleep(2)
-
-# ============== MAIN UPLOAD HANDLER ==============
 @bot.on_message(filters.command(["upload"]))
 async def upload_handler(bot: Client, m: Message):
-    """Main upload command handler"""
-    start_time = time.time()
-    
-    # Get input file
-    editable = await m.reply_text('📁 **Send me .txt file**')
+    editable = await m.reply_text('sᴇɴᴅ ᴍᴇ .ᴛxᴛ ғɪʟᴇ  ⏍')
+    input_msg: Message = await bot.listen(editable.chat.id)
+    x = await input_msg.download()
+    await input_msg.delete(True)
+
     try:
-        input_msg = await bot.listen(editable.chat.id, timeout=300)
-        if not input_msg.document or not input_msg.document.file_name.endswith('.txt'):
-            await editable.edit("❌ **Please send a valid .txt file**")
-            return
-        
-        x = await input_msg.download()
-        await input_msg.delete()
+       with open(x, "r") as f:
+           content = f.read()
+       content = content.split("\n")
+       links = []
+       for i in content:
+           if i.strip():
+               links.append(i)
+       os.remove(x)
     except Exception as e:
-        await editable.edit(f"❌ **Error:** {str(e)}")
-        return
+       await m.reply_text(f"∝ 𝐈𝐧𝐯𝐚𝐥𝐢𝐝 ᴜʀʟ ғɪʟᴇ.\nError: {str(e)}")
+       os.remove(x)
+       return
 
-    # Setup download directory
-    download_dir = f"./downloads/{m.chat.id}_{int(time.time())}"
-    os.makedirs(download_dir, exist_ok=True)
-    original_dir = os.getcwd()
-    os.chdir(download_dir)
+    await editable.edit(f"ɪɴ ᴛxᴛ ғɪʟᴇ ᴛɪᴛʟᴇ ʟɪɴᴋ 🔗** **{len(links)}**\n\nsᴇɴᴅ ғʀᴏᴍ  ᴡʜᴇʀᴇ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴅᴏᴡɴʟᴏᴀᴅ ɪɴɪᴛᴀʟ ɪs `1`")
+    input0: Message = await bot.listen(editable.chat.id)
+    raw_text = input0.text
+    await input0.delete(True)
 
-    # Parse links
+    await editable.edit("∝ 𝐍𝐨𝐰 𝐏𝐥𝐞𝐚𝐬𝐞 𝐒𝐞𝐧𝐝 𝐌𝐞 𝐘𝐨𝐮𝐫 𝐁𝐚𝐭𝐜𝐡 𝐍𝐚𝐦𝐞")
+    input1: Message = await bot.listen(editable.chat.id)
+    raw_text0 = input1.text
+    await input1.delete(True)
+
+    await editable.edit(Ashu.Q1_TEXT)
+    input2: Message = await bot.listen(editable.chat.id)
+    raw_text2 = input2.text
+    await input2.delete(True)
+
     try:
-        with open(x, "r", encoding="utf-8") as f:
-            content = f.read()
-        
-        lines = [line.strip() for line in content.split("\n") if line.strip()]
-        links = []
-        for line in lines:
-            if "://" in line:
-                parts = line.split("://", 1)
-                if len(parts) == 2:
-                    links.append([parts[0], parts[1]])
-        
-        safe_remove(x)
-        
-        if not links:
-            await editable.edit("❌ **No valid links found in file**")
-            os.chdir(original_dir)
-            shutil.rmtree(download_dir, ignore_errors=True)
-            return
-            
-    except Exception as e:
-        await editable.edit(f"❌ **Failed to parse file:** {str(e)}")
-        safe_remove(x)
-        os.chdir(original_dir)
-        shutil.rmtree(download_dir, ignore_errors=True)
-        return
+        if raw_text2 == "144":
+            res = "256x144"
+        elif raw_text2 == "240":
+            res = "426x240"
+        elif raw_text2 == "360":
+            res = "640x360"
+        elif raw_text2 == "480":
+            res = "854x480"
+        elif raw_text2 == "720":
+            res = "1280x720"
+        elif raw_text2 == "1080":
+            res = "1920x1080"
+        else:
+            res = "UN"
+    except Exception:
+        res = "UN"
 
-    # Get user inputs
-    await editable.edit(f"**📊 Total Links:** `{len(links)}`\n\nSend starting number (default: 1)")
-    try:
-        input0 = await bot.listen(editable.chat.id, timeout=60)
-        raw_text = input0.text
-        await input0.delete()
-    except:
-        raw_text = "1"
+    await editable.edit(Ashu.C1_TEXT)
+    input3: Message = await bot.listen(editable.chat.id)
+    raw_text3 = input3.text
+    await input3.delete(True)
 
-    await editable.edit("**📝 Send Batch Name:**")
-    try:
-        input1 = await bot.listen(editable.chat.id, timeout=60)
-        raw_text0 = input1.text
-        await input1.delete()
-    except:
-        raw_text0 = "Batch"
+    highlighter = f"️ ⁪⁬⁮⁮⁮"
+    if raw_text3 == 'Robin':
+        MR = highlighter
+    else:
+        MR = raw_text3
 
-    await editable.edit("**🎥 Send Quality (144/240/360/480/720/1080):**")
-    try:
-        input2 = await bot.listen(editable.chat.id, timeout=60)
-        raw_text2 = input2.text
-        await input2.delete()
-    except:
-        raw_text2 = "480"
-
-    await editable.edit("**✏️ Send Caption (or 'Robin' for default):**")
-    try:
-        input3 = await bot.listen(editable.chat.id, timeout=60)
-        raw_text3 = input3.text
-        await input3.delete()
-    except:
-        raw_text3 = ""
-
-    MR = f"️ ⁪⁬⁮⁮⁮" if raw_text3 == 'Robin' else raw_text3
-
-    await editable.edit("**🖼️ Send Thumbnail URL (or 'no'):**")
-    try:
-        input6 = await bot.listen(editable.chat.id, timeout=120)
-        thumb = input6.text
-        await input6.delete()
-    except:
-        thumb = "no"
-    
+    await editable.edit(Ashu.T1_TEXT)
+    input6 = await bot.listen(editable.chat.id)
+    raw_text6 = input6.text
+    await input6.delete(True)
     await editable.delete()
 
-    # Process thumbnail
+    thumb = input6.text
     if thumb.startswith("http://") or thumb.startswith("https://"):
-        try:
-            os.system(f"wget -q '{thumb}' -O 'thumb.jpg'")
-            thumb = "thumb.jpg" if os.path.exists("thumb.jpg") else "no"
-        except:
-            thumb = "no"
+        subprocess.getoutput(f"wget '{thumb}' -O 'thumb.jpg'")
+        thumb = "thumb.jpg"
+    else:
+        thumb = "no"
 
-    # Parse start count
-    try:
-        count = max(1, int(raw_text))
-    except:
+    if len(links) == 1:
         count = 1
+    else:
+        count = int(raw_text)
 
-    # Statistics
-    success_count = 0
-    failed_downloads = []
-    total_links = len(links)
+    for i, url in enumerate(links):
+        name1 = url.replace("\t", "").replace(":", "").replace("/", "").replace("+", "").replace("#", "").replace("|", "").replace("@", "").replace("*", "").replace(".", "").replace("https", "").replace("http", "").strip()
+        name = f'{str(count).zfill(3)}) {name1[:60]}'
 
-    # Process links
-    for i in range(count - 1, total_links):
         try:
-            # Process URL
-            url_part = links[i][1]
-            url_part = (url_part
-                .replace("file/d/", "uc?export=download&id=")
-                .replace("www.youtube-nocookie.com/embed", "youtu.be")
-                .replace("?modestbranding=1", "")
-                .replace("/view?usp=sharing", ""))
-            
-            url = "https://" + url_part
-            
-            # Clean name
-            raw_name = links[i][0]
-            for char in ["\t", ":", "/", "+", "#", "|", "@", "*", "https", "http"]:
-                raw_name = raw_name.replace(char, "")
-            raw_name = raw_name.strip()
-            
-            name1 = clean_filename(raw_name)
-            display_name = f'{str(count).zfill(3)}) {name1[:60]}'
-            file_safe_name = f'{str(count).zfill(3)})_{name1[:50]}'
-
-            # Captions
-            cc = f'**[ 🎥 ] Vid_ID:** {str(count).zfill(3)}.** {name1}{MR}.mkv\n✉️ **Batch:** {raw_text0}'
-            cc1 = f'**[ 📁 ] Pdf_ID:** {str(count).zfill(3)}. {name1}{MR}.pdf\n✉️ **Batch:** {raw_text0}'
-
-            # Check link type
-            is_classplus = any(x in url.lower() for x in ['classplusapp.com', 'media-cdn.classplusapp.com', 'cpvod.test'])
-            is_youtube = "youtu" in url.lower()
-            is_drive = "drive.google.com" in url.lower() or "drive" in url.lower()
-            is_pdf = url.lower().endswith('.pdf') or '.pdf' in url.lower()
-
-            progress_text = f"⏳ **Progress:** {i+1}/{total_links}\n🎬 **Current:** {display_name[:40]}"
-            
-            # Handle Google Drive
-            if is_drive:
+            if 'videos.classplusapp' in url or 'classplusapp' in url:
+                await m.reply_text(f"🔐 Resolving ClassPlus URL...")
                 try:
-                    prog = await m.reply_text(f"⬇️ **Drive Download:** {display_name}\n{progress_text}")
-                    ka = await helper.download(url, file_safe_name)
-                    
-                    if ka and os.path.exists(ka):
-                        await bot.send_document(chat_id=m.chat.id, document=ka, caption=cc1)
-                        success_count += 1
-                        safe_remove(ka)
-                    else:
-                        failed_downloads.append((display_name, "Drive download failed"))
-                    
-                    await prog.delete()
-                except Exception as e:
-                    failed_downloads.append((display_name, f"Drive: {str(e)}"))
-                count += 1
-                continue
+                    # Try primary method with token rotation
+                    url = get_classplus_signed_url(url, token_manager)
+                    await m.reply_text(f"✅ URL resolved!")
+                except Exception as cp_error:
+                    await m.reply_text(f"⚠️ Token rotation failed: {str(cp_error)[:50]}...")
+                    # Fallback to direct API call
+                    headers = {
+                        'x-access-token': CLASSPLUS_TOKENS[0] if CLASSPLUS_TOKENS else '',
+                        'api-version': '8',
+                        'accept-encoding': 'gzip',
+                        'authority': 'api.classplusapp.com'
+                    }
+                    response = requests.get(
+                        f'https://api.classplusapp.com/cams/uploader/video/jw-signed-url?url={url}',
+                        headers=headers
+                    )
+                    if response.status_code == 403:
+                        await m.reply_text("🚫 Token expired or invalid. Please check your CLASSPLUS_TOKENS.")
+                        continue
+                    url = response.json().get('url', url)
 
-            # Handle PDF
-            if is_pdf:
+            elif 'instagram.com' in url or 'instagr.am' in url:
+                await m.reply_text(f"🔐 Fetching Instagram post...")
                 try:
-                    prog = await m.reply_text(f"📄 **PDF Download:** {display_name}\n{progress_text}")
-                    pdf_path = f"{file_safe_name}.pdf"
-                    
-                    if await download_with_progress(url, pdf_path):
-                        await bot.send_document(chat_id=m.chat.id, document=pdf_path, caption=cc1)
-                        success_count += 1
-                        safe_remove(pdf_path)
-                    else:
-                        failed_downloads.append((display_name, "PDF download failed"))
-                    
-                    await prog.delete()
-                except Exception as e:
-                    failed_downloads.append((display_name, f"PDF: {str(e)}"))
-                count += 1
-                continue
+                    L = instaloader.Instaloader()
+                    L.login(user=INSTAGRAM_USERNAME, passwd=INSTAGRAM_PASSWORD)
+                    post = instaloader.Post.from_shortcode(L.context, url.split('/')[-2])
+                    media = post.url
+                    await m.reply_text(f"✅ Instagram post fetched!")
+                except Exception as ig_error:
+                    await m.reply_text(f"⚠️ Failed to fetch Instagram post: {str(ig_error)[:50]}...")
+                    continue
 
-            # Handle Video (YouTube, ClassPlus, Others)
-            try:
-                prog = await m.reply_text(
-                    f"🎥 **Video Download:** {display_name}\n"
-                    f"{'🎓 ClassPlus' if is_classplus else '📺 YouTube' if is_youtube else '🌐 Direct'}\n"
-                    f"{progress_text}"
-                )
+            # Prepare Captions
+            cc = f'**[ 🎥 ] Vid_ID:** {str(count).zfill(3)}.** {name1}{MR}.mkv\n✉️ 𝐁𝐚𝐭𝐜𝐡 » **{raw_text0}**'
 
-                success, filename, error = await download_video_ytdlp(
-                    url, file_safe_name, raw_text2, is_classplus
-                )
+            # yt-dlp Format Selection
+            ytf = f"b[height<={raw_text2}][ext=mp4]/bv[height<={raw_text2}][ext=mp4]+ba[ext=m4a]/b[ext=mp4]"
 
-                if success and filename and os.path.exists(filename):
-                    # Send video
-                    try:
-                        await helper.send_vid(bot, m, cc, filename, thumb, display_name, prog)
-                        success_count += 1
-                    except FloodWait as e:
-                        await asyncio.sleep(e.x)
-                        await helper.send_vid(bot, m, cc, filename, thumb, display_name, prog)
-                        success_count += 1
-                    except Exception as e:
-                        failed_downloads.append((display_name, f"Send: {str(e)}"))
-                    
-                    safe_remove(filename)
-                else:
-                    failed_downloads.append((display_name, error or "Download failed"))
-                    await prog.edit(f"❌ **Failed:** {display_name}\n**Error:** {error}")
+            # Command Construction
+            cmd = f'yt-dlp -f "{ytf}" "{url}" -o "{name}.mp4"'
 
-                await prog.delete()
-                
-            except Exception as e:
-                failed_downloads.append((display_name, f"Video: {str(e)}"))
-                logger.error(f"Video processing error: {e}")
+            # Download video using helper
+            Show = f"❊⟱ 𝐃𝐨𝐰𝐧𝐥𝐨𝐚𝐝𝐢𝐧𝐠 ⟱❊ »\n\n📝 𝐍𝐚𝐦𝐞 » `{name}\n⌨ 𝐐𝐮𝐥𝐢𝐭𝐲 » {raw_text2}`\n\n**🔗 𝐔𝐑𝐋 »** `{url}`"
+            prog = await m.reply_text(Show)
 
+            res_file = await helper.download_video(url, cmd, name)
+            filename = res_file
+
+            await prog.delete(True)
+            await helper.send_vid(bot, m, cc, filename, thumb, name, prog)
             count += 1
-            await asyncio.sleep(1)
+            time.sleep(1)
 
         except Exception as e:
-            logger.error(f"Loop error: {e}")
-            failed_downloads.append((links[i][0] if i < len(links) else "Unknown", str(e)))
-            count += 1
+            error_msg = str(e)
+            if "403" in error_msg:
+                error_msg += "\n\n💡 **Tip:** Token expired or invalid. Check CLASSPLUS_TOKENS in vars.py"
+            await m.reply_text(
+                f"⌘ 𝐃𝐨𝐰𝐧𝐥𝐨𝐚𝐝𝐢𝐧𝐠 𝐈𝐧𝐭𝐞𝐫𝐫𝐮𝐩𝐭𝐞𝐝\n{error_msg}\n⌘ 𝐍𝐚𝐦𝐞 » {name}\n⌘ 𝐋𝐢𝐧𝐤 » `{url}`"
+            )
             continue
 
-    # Final report
-    elapsed_time = time.time() - start_time
-    hours, remainder = divmod(int(elapsed_time), 3600)
-    minutes, seconds = divmod(remainder, 60)
-    
-    report = (
-        f"✅ **Batch Complete!**\n\n"
-        f"📊 **Statistics:**\n"
-        f"✓ Success: `{success_count}`\n"
-        f"✗ Failed: `{len(failed_downloads)}`\n"
-        f"⏱ Time: `{hours:02d}:{minutes:02d}:{seconds:02d}`\n\n"
-    )
-    
-    if failed_downloads:
-        report += "❌ **Failed Items:**\n"
-        for idx, (name, error) in enumerate(failed_downloads[:10], 1):
-            report += f"{idx}. `{name[:30]}...` - {error[:30]}\n"
-        if len(failed_downloads) > 10:
-            report += f"...and {len(failed_downloads)-10} more"
+    await m.reply_text("✅ 𝐒𝐮𝐜𝐜𝐞𝐬𝐬𝐟𝐮𝐥𝐥𝐲 𝐃𝐨𝐧𝐞")
 
-    await m.reply_text(report)
-    
-    # Cleanup
-    os.chdir(original_dir)
-    shutil.rmtree(download_dir, ignore_errors=True)
-    logger.info(f"Cleanup completed: {download_dir}")
-
-# ============== WEBHOOK & MAIN ==============
 async def main():
+    """Start web server for webhook support"""
     if WEBHOOK:
         app = await web_server()
         runner = web.AppRunner(app)
         await runner.setup()
         site = web.TCPSite(runner, "0.0.0.0", PORT)
         await site.start()
-        logger.info(f"Web server started on port {PORT}")
+        print(f"🌐 Web server started on port {PORT}")
 
 if __name__ == "__main__":
     print("""
-    ╔══════════════════════════════════════════════════════════╗
-    ║           🤖 TXT TO VIDEO BOT - PRO VERSION              ║
-    ║              Fixed & Enhanced by AI                      ║
-    ╚══════════════════════════════════════════════════════════╝
-    """)
-    
-    logger.info("Starting bot...")
-    
-    async def run_bot():
+    █░█░█ █▀█ █▀█ █▀▄ █▀▀ █▀█ ▄▀█ █▀▀ ▀█▀    ▄▀█ █▀ █░█ █░█ ▀█▀ █▀█ █▀ █░█  
+    ▀▄▀▄▀ █▄█ █▄█ █▄▀ █▄▄ █▀▄ █▀█ █▀░ ░█░    █▀█ ▄█ █▀█ █▄█ ░█░ █▄█ ▄█ █▀█ """)
+
+    async def start_bot():
         await bot.start()
-        logger.info("Bot started!")
-        
-        # Start web server if needed
-        if WEBHOOK:
-            await main()
-        
-        # Keep running
-        await asyncio.Event().wait()
-    
+        print("🤖 Bot started")
+
+    async def start_web():
+        await main()
+
+    loop = asyncio.get_event_loop()
     try:
-        asyncio.run(run_bot())
+        loop.create_task(start_bot())
+        loop.create_task(start_web())
+        loop.run_forever()
     except KeyboardInterrupt:
-        logger.info("Bot stopped by user")
-    except Exception as e:
-        logger.error(f"Fatal error: {e}")
+        print("🛑 Stopped")
+    finally:
+        loop.stop()
